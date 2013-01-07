@@ -97,10 +97,22 @@ class Lv_menu_ext
 		{
 			$menu = $this->EE->extensions->last_call;
 		}
-		
-		if (isset($menu['content']) && is_array($menu['content']))
+
+		if (isset($menu['content']) && is_array($menu['content']) && $this->EE->cp->allowed_group('can_access_addons', 'can_access_modules'))
 		{
 			$variables = array();
+            
+            $query = $this->EE->db->join('module_member_groups', 'module_member_groups.module_id = modules.module_id')
+                                    ->where('module_member_groups.group_id', $this->EE->session->userdata('group_id'))
+                                    ->where('module_name', 'Low_variables')
+                                    ->get('modules');
+            
+            if ($query->num_rows() === 0)
+            {
+                return $menu;
+            }
+            
+            $query->free_result();
 			
 			$query = $this->EE->db->select('settings')
 						 ->limit(1)
@@ -113,22 +125,27 @@ class Lv_menu_ext
 			}
 			
 			$settings = @unserialize($query->row('settings'));
+
+            $can_manage = TRUE;
 			
 			$query->free_result();
 			
-			if (empty($settings['can_manage']) || ! in_array($this->EE->session->userdata('group_id'), $settings['can_manage']))
+			if (isset($settings['can_manage']) && ! in_array($this->EE->session->userdata('group_id'), $settings['can_manage']))
 			{
-				return $menu;
+                $can_manage = FALSE;
+
+                $this->EE->db->where('is_hidden', 'n');
 			}
-			
-			$query = $this->EE->db->join('global_variables', 'global_variables.variable_id = low_variables.variable_id')
-						 ->where('site_id', $this->EE->config->item('site_id'))
-						 ->get('low_variables');
-			
-			if ($query->num_rows() === 0)
-			{
-				return $menu;
-			}
+
+            $query = $this->EE->db->join('global_variables', 'global_variables.variable_id = low_variables.variable_id')
+                         ->where('site_id', $this->EE->config->item('site_id'))
+                         ->order_by('variable_order')
+                         ->get('low_variables');
+
+            if ($query->num_rows() === 0)
+            {
+                return $menu;
+            }
 			
 			$all_variables = $query->result();
 			
@@ -149,12 +166,7 @@ class Lv_menu_ext
 			
 			foreach ($all_variables as $row)
 			{
-				if ($row->is_hidden === 'y')
-				{
-					continue;
-				}
-
-				$group = $row->group_id ? $variable_groups[$row->group_id] : 'ungrouped';
+                $group = $row->group_id ? $variable_groups[$row->group_id] : 'ungrouped';
 				
 				if ( ! isset($variables[$group]))
 				{
@@ -170,18 +182,26 @@ class Lv_menu_ext
 
 			$this->EE->lang->loadfile('lv_menu', 'lv_menu');
 
-			if ($variables)
-			{
-				$variables[] = '----';
-			}
+            if ($can_manage)
+            {
+    			if ($variables)
+    			{
+    				$variables[] = '----';
+    			}
 
-			$variables['manage_variables'] = BASE.AMP.'C=addons_modules'.AMP.'M=show_module_cp'.AMP.'module=low_variables'.AMP.'method=manage';
+    			$variables['manage_variables'] = BASE.AMP.'C=addons_modules'.AMP.'M=show_module_cp'.AMP.'module=low_variables'.AMP.'method=manage';
 
-			$variables['create_variable'] = BASE.AMP.'C=addons_modules'.AMP.'M=show_module_cp'.AMP.'module=low_variables'.AMP.'method=manage'.AMP.'id=new';
+    			$variables['create_variable'] = BASE.AMP.'C=addons_modules'.AMP.'M=show_module_cp'.AMP.'module=low_variables'.AMP.'method=manage'.AMP.'id=new';
 
-			$variables['create_group'] = BASE.AMP.'C=addons_modules'.AMP.'M=show_module_cp'.AMP.'module=low_variables'.AMP.'method=edit_group'.AMP.'id=new';
+    			$variables['create_group'] = BASE.AMP.'C=addons_modules'.AMP.'M=show_module_cp'.AMP.'module=low_variables'.AMP.'method=edit_group'.AMP.'id=new';
 
-			$variables['variable_settings'] = BASE.AMP.'C=addons_extensions'.AMP.'M=extension_settings'.AMP.'file=low_variables';
+    			$variables['variable_settings'] = BASE.AMP.'C=addons_extensions'.AMP.'M=extension_settings'.AMP.'file=low_variables';
+            }
+
+            if (count($variables) === 2 && is_array(current($variables)))
+            {
+                $variables = current($variables);
+            }
 
 			$menu['content'] = array_merge(
 				array_slice($menu['content'], 0, 3),
