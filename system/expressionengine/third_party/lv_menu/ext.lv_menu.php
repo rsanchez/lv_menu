@@ -101,18 +101,18 @@ class Lv_menu_ext
 		if (isset($menu['content']) && is_array($menu['content']) && $this->EE->cp->allowed_group('can_access_addons', 'can_access_modules'))
 		{
 			$variables = array();
-            
-            $query = $this->EE->db->join('module_member_groups', 'module_member_groups.module_id = modules.module_id')
-                                    ->where('module_member_groups.group_id', $this->EE->session->userdata('group_id'))
-                                    ->where('module_name', 'Low_variables')
-                                    ->get('modules');
-            
-            if ($query->num_rows() === 0)
+
+            if ($this->EE->session->userdata('group_id') != 1)
             {
-                return $menu;
+                $this->EE->db->join('module_member_groups', 'module_member_groups.module_id = modules.module_id')
+                                        ->where('module_member_groups.group_id', $this->EE->session->userdata('group_id'))
+                                        ->where('module_name', 'Low_variables');
+                
+                if ($this->EE->db->count_all_results('modules') === 0)
+                {
+                    return $menu;
+                }
             }
-            
-            $query->free_result();
 			
 			$query = $this->EE->db->select('settings')
 						 ->limit(1)
@@ -123,19 +123,22 @@ class Lv_menu_ext
 			{
 				return $menu;
 			}
-			
-			$settings = @unserialize($query->row('settings'));
 
             $can_manage = TRUE;
-			
-			$query->free_result();
-			
-			if (isset($settings['can_manage']) && ! in_array($this->EE->session->userdata('group_id'), $settings['can_manage']))
-			{
-                $can_manage = FALSE;
 
-                $this->EE->db->where('is_hidden', 'n');
-			}
+            if ($this->EE->session->userdata('group_id') != 1)
+            {
+    			$settings = @unserialize($query->row('settings'));
+    			
+    			$query->free_result();
+    			
+    			if (isset($settings['can_manage']) && ! in_array($this->EE->session->userdata('group_id'), $settings['can_manage']))
+    			{
+                    $can_manage = FALSE;
+
+                    $this->EE->db->where('is_hidden', 'n');
+    			}
+            }
 
             $query = $this->EE->db->join('global_variables', 'global_variables.variable_id = low_variables.variable_id')
                          ->where('site_id', $this->EE->config->item('site_id'))
